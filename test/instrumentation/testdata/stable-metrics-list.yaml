@@ -1,3 +1,43 @@
+- name: automatic_reload_last_timestamp_seconds
+  subsystem: authentication_config_controller
+  namespace: apiserver
+  help: Timestamp of the last automatic reload of authentication configuration split
+    by status and apiserver identity.
+  type: Gauge
+  stabilityLevel: BETA
+  labels:
+  - apiserver_id_hash
+  - status
+- name: automatic_reloads_total
+  subsystem: authentication_config_controller
+  namespace: apiserver
+  help: Total number of automatic reloads of authentication configuration split by
+    status and apiserver identity.
+  type: Counter
+  stabilityLevel: BETA
+  labels:
+  - apiserver_id_hash
+  - status
+- name: automatic_reload_last_timestamp_seconds
+  subsystem: authorization_config_controller
+  namespace: apiserver
+  help: Timestamp of the last automatic reload of authorization configuration split
+    by status and apiserver identity.
+  type: Gauge
+  stabilityLevel: BETA
+  labels:
+  - apiserver_id_hash
+  - status
+- name: automatic_reloads_total
+  subsystem: authorization_config_controller
+  namespace: apiserver
+  help: Total number of automatic reloads of authorization configuration split by
+    status and apiserver identity.
+  type: Counter
+  stabilityLevel: BETA
+  labels:
+  - apiserver_id_hash
+  - status
 - name: compilation_duration_seconds
   subsystem: cel
   namespace: apiserver
@@ -371,8 +411,9 @@
   - 1e+08
   - 1e+09
 - name: apiserver_storage_objects
-  help: Number of stored objects at the time of last check split by kind. In case
-    of a fetching error, the value will be -1.
+  help: '[DEPRECATED, consider using apiserver_resource_objects instead] Number of
+    stored objects at the time of last check split by kind. In case of a fetching
+    error, the value will be -1.'
   type: Gauge
   stabilityLevel: STABLE
   labels:

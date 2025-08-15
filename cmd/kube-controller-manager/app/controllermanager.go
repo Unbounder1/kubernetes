@@ -144,6 +144,8 @@ controller, and serviceaccounts controller.`,
 			// add feature enablement metrics
 			fg := s.ComponentGlobalsRegistry.FeatureGateFor(basecompatibility.DefaultKubeComponent)
 			fg.(featuregate.MutableFeatureGate).AddMetrics()
+			// add component version metrics
+			s.ComponentGlobalsRegistry.AddMetrics()
 			return Run(ctx, c.Complete())
 		},
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -563,6 +565,7 @@ func NewControllerDescriptors() map[string]*ControllerDescriptor {
 	register(newCertificateSigningRequestSigningControllerDescriptor())
 	register(newCertificateSigningRequestApprovingControllerDescriptor())
 	register(newCertificateSigningRequestCleanerControllerDescriptor())
+	register(newPodCertificateRequestCleanerControllerDescriptor())
 	register(newTTLControllerDescriptor())
 	register(newBootstrapSignerControllerDescriptor())
 	register(newTokenCleanerControllerDescriptor())

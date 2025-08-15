@@ -38,6 +38,13 @@ const (
 	inputTagName          = "k8s:validation-gen-input"
 	schemeRegistryTagName = "k8s:validation-gen-scheme-registry" // defaults to k8s.io/apimachinery/pkg.runtime.Scheme
 	testFixtureTagName    = "k8s:validation-gen-test-fixture"    // if set, generate go test files for test fixtures.  Supported values: "validateFalse".
+
+	// name of the subresource that this type represents and can validate declaratively.
+	isSubresourceTagName = "k8s:isSubresource"
+
+	// name of a subresource that this type can validate declaratively, tag may be
+	// repeated to support multiple subresources.
+	supportsSubresourceTagName = "k8s:supportsSubresource"
 )
 
 var (
@@ -116,6 +123,43 @@ func schemeRegistryTag(pkg *types.Package) types.Name {
 	return types.ParseFullyQualifiedName(values[0].Value)
 }
 
+func isSubresourceTag(t *types.Type) (string, bool) {
+	var comments []string
+	comments = append(comments, t.SecondClosestCommentLines...)
+	comments = append(comments, t.CommentLines...)
+	tags, err := gengo.ExtractFunctionStyleCommentTags("+", []string{isSubresourceTagName}, comments)
+	if err != nil {
+		klog.Fatalf("Failed to extract isSubresource tags: %v", err)
+	}
+	values, found := tags[isSubresourceTagName]
+	if !found || len(values) == 0 {
+		return "", false
+	}
+	if len(values) > 1 {
+		panic(fmt.Sprintf("Type %q contains more than one usage of %q", t.Name.String(), isSubresourceTagName))
+	}
+	return values[0].Value, true
+}
+
+func supportedSubresourceTags(t *types.Type) sets.Set[string] {
+	var comments []string
+	comments = append(comments, t.SecondClosestCommentLines...)
+	comments = append(comments, t.CommentLines...)
+	tags, err := gengo.ExtractFunctionStyleCommentTags("+", []string{supportsSubresourceTagName}, comments)
+	if err != nil {
+		klog.Fatalf("Failed to extract supportedSubresource tags: %v", err)
+	}
+	values, found := tags[supportsSubresourceTagName]
+	if !found || len(values) == 0 {
+		return sets.New[string]()
+	}
+	subresources := sets.New[string]()
+	for _, tag := range values {
+		subresources.Insert(tag.Value)
+	}
+	return subresources
+}
+
 var testFixtureTagValues = sets.New("validateFalse")
 
 func testFixtureTag(pkg *types.Package) sets.Set[string] {
@@ -177,7 +221,7 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 	inputPkgs := make([]string, 0, len(context.Inputs))
 	pkgToInput := map[string]string{}
 	for _, input := range context.Inputs {
-		klog.V(5).Infof("considering pkg %q", input)
+		klog.V(4).Infof("considering pkg %q", input)
 
 		pkg := context.Universe[input]
 
@@ -195,7 +239,7 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 				klog.Fatalf("relative path (%s=%s) is not supported; use full package path (as used by 'import') instead", inputTagName, inputPath)
 			}
 
-			klog.V(5).Infof("  input pkg %v", inputPath)
+			klog.V(4).Infof("  input pkg %v", inputPath)
 			inputPkgs = append(inputPkgs, inputPath)
 			pkgToInput[input] = inputPath
 		} else {
@@ -309,14 +353,14 @@ func GetTargets(context *generator.Context, args *Args) []generator.Target {
 		})
 
 		for _, t := range rootTypes {
-			klog.V(4).InfoS("pre-processing", "type", t)
+			klog.V(3).InfoS("pre-processing", "type", t)
 			if err := td.DiscoverType(t); err != nil {
 				klog.Fatalf("failed to generate validations: %v", err)
 			}
 		}
 
 		for _, t := range rootTypes {
-			klog.V(4).InfoS("linting root-type", "type", t)
+			klog.V(3).InfoS("linting root-type", "type", t)
 			if err := linter.lintType(t); err != nil {
 				klog.Fatalf("failed to lint type %q: %v", t.Name, err)
 			}

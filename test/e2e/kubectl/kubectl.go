@@ -84,7 +84,7 @@ import (
 	imageutils "k8s.io/kubernetes/test/utils/image"
 	admissionapi "k8s.io/pod-security-admission/api"
 	uexec "k8s.io/utils/exec"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -604,9 +604,10 @@ var _ = SIGDescribe("Kubectl client", func() {
 
 				ginkgo.By("adding rbac permissions")
 				// grant the view permission widely to allow inspection of the `invalid` namespace and the default namespace
-				err := e2eauth.BindClusterRole(ctx, f.ClientSet.RbacV1(), "view", f.Namespace.Name,
+				cleanupFunc, err := e2eauth.BindClusterRole(ctx, f.ClientSet.RbacV1(), "view", f.Namespace.Name,
 					rbacv1.Subject{Kind: rbacv1.ServiceAccountKind, Namespace: f.Namespace.Name, Name: "default"})
 				framework.ExpectNoError(err)
+				defer cleanupFunc(ctx)
 
 				err = e2eauth.WaitForAuthorizationUpdate(ctx, f.ClientSet.AuthorizationV1(),
 					serviceaccount.MakeUsername(f.Namespace.Name, "default"),
@@ -1236,7 +1237,7 @@ metadata:
 					framework.Failf("failed to unmarshal schema: %v", err)
 				}
 				// Allow for arbitrary-extra properties.
-				props.XPreserveUnknownFields = pointer.BoolPtr(true)
+				props.XPreserveUnknownFields = ptr.To(true)
 				for i := range crd.Spec.Versions {
 					crd.Spec.Versions[i].Schema = &apiextensionsv1.CustomResourceValidation{OpenAPIV3Schema: props}
 				}

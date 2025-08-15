@@ -25,27 +25,28 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"text/template"
 	"time"
 
 	"gopkg.in/go-jose/go-jose.v2"
 
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/authentication/user"
-	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	"k8s.io/apiserver/pkg/server/egressselector"
 	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 // utilities for loading JOSE keys.
@@ -378,8 +379,6 @@ func (c *claimsTest) run(t *testing.T) {
 }
 
 func TestToken(t *testing.T) {
-	featuregatetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.StructuredAuthenticationConfiguration, true)
-
 	synchronizeTokenIDVerifierForTest = true
 	tests := []claimsTest{
 		{
@@ -393,7 +392,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -424,7 +423,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -452,7 +451,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "email",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -484,7 +483,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "email",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -515,7 +514,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "email",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -546,7 +545,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "email",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -577,11 +576,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -614,11 +613,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -671,11 +670,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -729,11 +728,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -783,11 +782,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -831,11 +830,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -885,11 +884,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "rabbits",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -942,11 +941,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -997,11 +996,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1054,11 +1053,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1114,11 +1113,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1152,11 +1151,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1209,11 +1208,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1253,11 +1252,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1288,11 +1287,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1322,11 +1321,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 					ClaimValidationRules: []apiserver.ClaimValidationRule{
@@ -1369,11 +1368,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 					ClaimValidationRules: []apiserver.ClaimValidationRule{
@@ -1408,11 +1407,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 					ClaimValidationRules: []apiserver.ClaimValidationRule{
@@ -1448,7 +1447,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -1477,7 +1476,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -1506,7 +1505,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -1537,7 +1536,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1570,7 +1569,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1603,7 +1602,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1636,7 +1635,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1667,7 +1666,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 					ClaimValidationRules: []apiserver.ClaimValidationRule{
@@ -1706,7 +1705,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 					ClaimValidationRules: []apiserver.ClaimValidationRule{
@@ -1742,7 +1741,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -1771,7 +1770,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("oidc:"),
+							Prefix: ptr.To("oidc:"),
 						},
 					},
 				},
@@ -1802,11 +1801,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("oidc:"),
+							Prefix: ptr.To("oidc:"),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String("groups:"),
+							Prefix: ptr.To("groups:"),
 						},
 					},
 				},
@@ -1839,11 +1838,11 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("oidc:"),
+							Prefix: ptr.To("oidc:"),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String("groups:"),
+							Prefix: ptr.To("groups:"),
 						},
 					},
 				},
@@ -1896,7 +1895,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -1926,7 +1925,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1958,7 +1957,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -1991,7 +1990,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -2012,7 +2011,7 @@ func TestToken(t *testing.T) {
 					},
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -2034,7 +2033,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -2057,7 +2056,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -2082,7 +2081,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -2106,7 +2105,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -2126,7 +2125,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "email",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -2157,7 +2156,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("prefix:"),
+							Prefix: ptr.To("prefix:"),
 						},
 					},
 				},
@@ -2186,7 +2185,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("system:"),
+							Prefix: ptr.To("system:"),
 						},
 					},
 					UserValidationRules: []apiserver.UserValidationRule{
@@ -2224,7 +2223,7 @@ func TestToken(t *testing.T) {
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Claim:  "groups",
-							Prefix: pointer.String("system:"),
+							Prefix: ptr.To("system:"),
 						},
 					},
 					UserValidationRules: []apiserver.UserValidationRule{
@@ -2260,7 +2259,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 					ClaimValidationRules: []apiserver.ClaimValidationRule{
@@ -2295,7 +2294,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 					ClaimValidationRules: []apiserver.ClaimValidationRule{
@@ -2333,7 +2332,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 					ClaimValidationRules: []apiserver.ClaimValidationRule{
@@ -2374,7 +2373,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 					ClaimValidationRules: []apiserver.ClaimValidationRule{
@@ -3097,7 +3096,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String("oidc:"),
+							Prefix: ptr.To("oidc:"),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Expression: `(claims.roles.split(",") + claims.other_roles.split(",")).map(role, "groups:" + role)`,
@@ -3460,6 +3459,378 @@ func TestToken(t *testing.T) {
 			wantInitErr: `issuer.url: Invalid value: "https://auth.example.com": URL must not overlap with disallowed issuers: [https://auth.example.com]`,
 		},
 		{
+			name: "invalid egress type",
+			options: Options{
+				JWTAuthenticator: apiserver.JWTAuthenticator{
+					Issuer: apiserver.Issuer{
+						URL:                "https://auth.example.com",
+						Audiences:          []string{"my-client"},
+						EgressSelectorType: "etcd",
+					},
+					ClaimMappings: apiserver.ClaimMappings{
+						Username: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.username",
+						},
+						Groups: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.groups",
+						},
+						UID: apiserver.ClaimOrExpression{
+							Expression: "claims.uid",
+						},
+						Extra: []apiserver.ExtraMapping{
+							{
+								Key:             "example.org/foo",
+								ValueExpression: "claims.foo",
+							},
+							{
+								Key:             "example.org/bar",
+								ValueExpression: "claims.bar",
+							},
+						},
+					},
+				},
+				EgressLookup: func(networkContext egressselector.NetworkContext) (utilnet.DialFunc, error) {
+					return nil, fmt.Errorf("should not be called")
+				},
+				now: func() time.Time { return now },
+			},
+			signingKey: loadRSAPrivKey(t, "testdata/rsa_1.pem", jose.RS256),
+			pubKeys: []*jose.JSONWebKey{
+				loadRSAKey(t, "testdata/rsa_1.pem", jose.RS256),
+			},
+			claims: fmt.Sprintf(`{
+				"iss": "https://auth.example.com",
+				"aud": "my-client",
+				"username": "jane",
+				"groups": ["team1", "team2"],
+				"exp": %d,
+				"uid": "1234",
+				"foo": "bar",
+				"bar": [
+					"baz",
+					"qux"
+				]
+			}`, valid.Unix()),
+			wantInitErr: `issuer.egressSelectorType: Invalid value: "etcd": egress selector must be either controlplane or cluster`,
+		},
+		{
+			name: "valid egress type with error",
+			options: Options{
+				JWTAuthenticator: apiserver.JWTAuthenticator{
+					Issuer: apiserver.Issuer{
+						URL:                "https://auth.example.com",
+						Audiences:          []string{"my-client"},
+						EgressSelectorType: "cluster",
+					},
+					ClaimMappings: apiserver.ClaimMappings{
+						Username: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.username",
+						},
+						Groups: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.groups",
+						},
+						UID: apiserver.ClaimOrExpression{
+							Expression: "claims.uid",
+						},
+						Extra: []apiserver.ExtraMapping{
+							{
+								Key:             "example.org/foo",
+								ValueExpression: "claims.foo",
+							},
+							{
+								Key:             "example.org/bar",
+								ValueExpression: "claims.bar",
+							},
+						},
+					},
+				},
+				EgressLookup: func(networkContext egressselector.NetworkContext) (utilnet.DialFunc, error) {
+					if networkContext.EgressSelectionName != egressselector.Cluster {
+						return nil, fmt.Errorf("unexpected egress type %q", networkContext.EgressSelectionName)
+					}
+					return nil, fmt.Errorf("always fail, saw type %q", networkContext.EgressSelectionName)
+				},
+				now: func() time.Time { return now },
+			},
+			signingKey: loadRSAPrivKey(t, "testdata/rsa_1.pem", jose.RS256),
+			pubKeys: []*jose.JSONWebKey{
+				loadRSAKey(t, "testdata/rsa_1.pem", jose.RS256),
+			},
+			claims: fmt.Sprintf(`{
+				"iss": "https://auth.example.com",
+				"aud": "my-client",
+				"username": "jane",
+				"groups": ["team1", "team2"],
+				"exp": %d,
+				"uid": "1234",
+				"foo": "bar",
+				"bar": [
+					"baz",
+					"qux"
+				]
+			}`, valid.Unix()),
+			wantInitErr: `oidc: egress lookup for "cluster" failed: always fail, saw type "cluster"`,
+		},
+		{
+			name: "valid egress type with error - again",
+			options: Options{
+				JWTAuthenticator: apiserver.JWTAuthenticator{
+					Issuer: apiserver.Issuer{
+						URL:                "https://auth.example.com",
+						Audiences:          []string{"my-client"},
+						EgressSelectorType: "controlplane",
+					},
+					ClaimMappings: apiserver.ClaimMappings{
+						Username: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.username",
+						},
+						Groups: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.groups",
+						},
+						UID: apiserver.ClaimOrExpression{
+							Expression: "claims.uid",
+						},
+						Extra: []apiserver.ExtraMapping{
+							{
+								Key:             "example.org/foo",
+								ValueExpression: "claims.foo",
+							},
+							{
+								Key:             "example.org/bar",
+								ValueExpression: "claims.bar",
+							},
+						},
+					},
+				},
+				EgressLookup: func(networkContext egressselector.NetworkContext) (utilnet.DialFunc, error) {
+					if networkContext.EgressSelectionName != egressselector.ControlPlane {
+						return nil, fmt.Errorf("unexpected egress type %q", networkContext.EgressSelectionName)
+					}
+					return nil, fmt.Errorf("always fail, saw type %q", networkContext.EgressSelectionName)
+				},
+				now: func() time.Time { return now },
+			},
+			signingKey: loadRSAPrivKey(t, "testdata/rsa_1.pem", jose.RS256),
+			pubKeys: []*jose.JSONWebKey{
+				loadRSAKey(t, "testdata/rsa_1.pem", jose.RS256),
+			},
+			claims: fmt.Sprintf(`{
+				"iss": "https://auth.example.com",
+				"aud": "my-client",
+				"username": "jane",
+				"groups": ["team1", "team2"],
+				"exp": %d,
+				"uid": "1234",
+				"foo": "bar",
+				"bar": [
+					"baz",
+					"qux"
+				]
+			}`, valid.Unix()),
+			wantInitErr: `oidc: egress lookup for "controlplane" failed: always fail, saw type "controlplane"`,
+		},
+		{
+			name: "valid egress type with no egress config",
+			options: Options{
+				JWTAuthenticator: apiserver.JWTAuthenticator{
+					Issuer: apiserver.Issuer{
+						URL:                "https://auth.example.com",
+						Audiences:          []string{"my-client"},
+						EgressSelectorType: "controlplane",
+					},
+					ClaimMappings: apiserver.ClaimMappings{
+						Username: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.username",
+						},
+						Groups: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.groups",
+						},
+						UID: apiserver.ClaimOrExpression{
+							Expression: "claims.uid",
+						},
+						Extra: []apiserver.ExtraMapping{
+							{
+								Key:             "example.org/foo",
+								ValueExpression: "claims.foo",
+							},
+							{
+								Key:             "example.org/bar",
+								ValueExpression: "claims.bar",
+							},
+						},
+					},
+				},
+				EgressLookup: nil,
+				now:          func() time.Time { return now },
+			},
+			signingKey: loadRSAPrivKey(t, "testdata/rsa_1.pem", jose.RS256),
+			pubKeys: []*jose.JSONWebKey{
+				loadRSAKey(t, "testdata/rsa_1.pem", jose.RS256),
+			},
+			claims: fmt.Sprintf(`{
+				"iss": "https://auth.example.com",
+				"aud": "my-client",
+				"username": "jane",
+				"groups": ["team1", "team2"],
+				"exp": %d,
+				"uid": "1234",
+				"foo": "bar",
+				"bar": [
+					"baz",
+					"qux"
+				]
+			}`, valid.Unix()),
+			wantInitErr: `oidc: egress lookup required with egress selector type "controlplane"`,
+		},
+		{
+			name: "valid egress type with no egress config for the given type",
+			options: Options{
+				JWTAuthenticator: apiserver.JWTAuthenticator{
+					Issuer: apiserver.Issuer{
+						URL:                "https://auth.example.com",
+						Audiences:          []string{"my-client"},
+						EgressSelectorType: "controlplane",
+					},
+					ClaimMappings: apiserver.ClaimMappings{
+						Username: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.username",
+						},
+						Groups: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.groups",
+						},
+						UID: apiserver.ClaimOrExpression{
+							Expression: "claims.uid",
+						},
+						Extra: []apiserver.ExtraMapping{
+							{
+								Key:             "example.org/foo",
+								ValueExpression: "claims.foo",
+							},
+							{
+								Key:             "example.org/bar",
+								ValueExpression: "claims.bar",
+							},
+						},
+					},
+				},
+				EgressLookup: func(networkContext egressselector.NetworkContext) (utilnet.DialFunc, error) {
+					return nil, nil
+				},
+				now: func() time.Time { return now },
+			},
+			signingKey: loadRSAPrivKey(t, "testdata/rsa_1.pem", jose.RS256),
+			pubKeys: []*jose.JSONWebKey{
+				loadRSAKey(t, "testdata/rsa_1.pem", jose.RS256),
+			},
+			claims: fmt.Sprintf(`{
+				"iss": "https://auth.example.com",
+				"aud": "my-client",
+				"username": "jane",
+				"groups": ["team1", "team2"],
+				"exp": %d,
+				"uid": "1234",
+				"foo": "bar",
+				"bar": [
+					"baz",
+					"qux"
+				]
+			}`, valid.Unix()),
+			wantInitErr: `oidc: egress lookup for "controlplane" is not configured`,
+		},
+		{
+			name: "valid egress type with broken dialer",
+			options: Options{
+				JWTAuthenticator: apiserver.JWTAuthenticator{
+					Issuer: apiserver.Issuer{
+						URL:                "https://auth.example.com",
+						Audiences:          []string{"my-client"},
+						EgressSelectorType: "controlplane",
+					},
+					ClaimMappings: apiserver.ClaimMappings{
+						Username: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.username",
+						},
+						Groups: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.groups",
+						},
+						UID: apiserver.ClaimOrExpression{
+							Expression: "claims.uid",
+						},
+						Extra: []apiserver.ExtraMapping{
+							{
+								Key:             "example.org/foo",
+								ValueExpression: "claims.foo",
+							},
+							{
+								Key:             "example.org/bar",
+								ValueExpression: "claims.bar",
+							},
+						},
+					},
+				},
+				EgressLookup: func(networkContext egressselector.NetworkContext) (utilnet.DialFunc, error) {
+					return func(ctx context.Context, net, addr string) (net.Conn, error) {
+						return nil, fmt.Errorf("broken dialer")
+					}, nil
+				},
+				now: func() time.Time { return now },
+			},
+			fetchKeysFromRemote: true,
+			wantHealthErrPrefix: `oidc: authenticator for issuer "https://auth.example.com" is not healthy: Get "https://auth.example.com/.well-known/openid-configuration": broken dialer`,
+		},
+		{
+			name: "valid egress type with working dialer",
+			options: Options{
+				JWTAuthenticator: apiserver.JWTAuthenticator{
+					Issuer: apiserver.Issuer{
+						URL:                "https://auth.example.com",
+						DiscoveryURL:       "{{.URL}}/.well-known/openid-configuration",
+						Audiences:          []string{"my-client"},
+						EgressSelectorType: "cluster",
+					},
+					ClaimMappings: apiserver.ClaimMappings{
+						Username: apiserver.PrefixedClaimOrExpression{
+							Claim:  "username",
+							Prefix: ptr.To(""),
+						},
+					},
+				},
+				EgressLookup: func() egressselector.Lookup {
+					var called atomic.Bool
+					t.Cleanup(func() {
+						if !called.Load() {
+							t.Errorf("egress lookup was not called")
+						}
+					})
+					return func(networkContext egressselector.NetworkContext) (utilnet.DialFunc, error) {
+						return func(ctx context.Context, network, address string) (net.Conn, error) {
+							called.Store(true)
+							return (&net.Dialer{}).DialContext(ctx, network, address)
+						}, nil
+					}
+				}(),
+				now: func() time.Time { return now },
+			},
+			signingKey: loadRSAPrivKey(t, "testdata/rsa_1.pem", jose.RS256),
+			pubKeys: []*jose.JSONWebKey{
+				loadRSAKey(t, "testdata/rsa_1.pem", jose.RS256),
+			},
+			claims: fmt.Sprintf(`{
+				"iss": "https://auth.example.com",
+				"aud": "my-client",
+				"username": "jane",
+				"exp": %d
+			}`, valid.Unix()),
+			openIDConfig: `{
+					"issuer": "https://auth.example.com",
+					"jwks_uri": "{{.URL}}/.testing/keys"
+			}`,
+			fetchKeysFromRemote: true,
+			want: &user.DefaultInfo{
+				Name: "jane",
+			},
+		},
+		{
 			name: "extra claim mapping, empty string value for key",
 			options: Options{
 				JWTAuthenticator: apiserver.JWTAuthenticator{
@@ -3678,7 +4049,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 						Groups: apiserver.PrefixedClaimOrExpression{
 							Expression: "claims.groups",
@@ -3763,7 +4134,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -3800,7 +4171,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -3837,7 +4208,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -3874,7 +4245,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -3911,7 +4282,7 @@ func TestToken(t *testing.T) {
 					ClaimMappings: apiserver.ClaimMappings{
 						Username: apiserver.PrefixedClaimOrExpression{
 							Claim:  "username",
-							Prefix: pointer.String(""),
+							Prefix: ptr.To(""),
 						},
 					},
 				},
@@ -4081,6 +4452,43 @@ func TestToken(t *testing.T) {
 			want: &user.DefaultInfo{
 				Name: "jane",
 			},
+		},
+		{
+			name: "using credential id and user validation rule to simulate revocation",
+			options: Options{
+				JWTAuthenticator: apiserver.JWTAuthenticator{
+					Issuer: apiserver.Issuer{
+						URL:       "https://auth.example.com",
+						Audiences: []string{"my-client"},
+					},
+					ClaimMappings: apiserver.ClaimMappings{
+						Username: apiserver.PrefixedClaimOrExpression{
+							Expression: "claims.username",
+						},
+					},
+					UserValidationRules: []apiserver.UserValidationRule{
+						{
+							// While full token revocation is not supported, it is possible to approximate revocation by writing user info validation rules
+							// based on a unique identifier in the token, such as the jti claim (if present).
+							Expression: `!(user.extra[?'authentication.kubernetes.io/credential-id'][0].orValue('') in ["JTI=ea28ed49-2e11-4280-9ec5-bc3d1d84661a"])`,
+							Message:    "credential is revoked",
+						},
+					},
+				},
+				now: func() time.Time { return now },
+			},
+			signingKey: loadRSAPrivKey(t, "testdata/rsa_1.pem", jose.RS256),
+			pubKeys: []*jose.JSONWebKey{
+				loadRSAKey(t, "testdata/rsa_1.pem", jose.RS256),
+			},
+			claims: fmt.Sprintf(`{
+				"iss": "https://auth.example.com",
+				"aud": "my-client",
+				"username": "jane",
+				"exp": %d,
+				"jti": "ea28ed49-2e11-4280-9ec5-bc3d1d84661a"
+			}`, valid.Unix()),
+			wantErr: `oidc: error evaluating user info validation rule: validation expression '!(user.extra[?'authentication.kubernetes.io/credential-id'][0].orValue('') in ["JTI=ea28ed49-2e11-4280-9ec5-bc3d1d84661a"])' failed: credential is revoked`,
 		},
 	}
 

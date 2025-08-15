@@ -215,10 +215,13 @@ aliases:
     - seans3
     - soltysh
   sig-testing-reviewers:
+    - aojea
     - bentheelder
     - cblecker
-    - spiffxp
     - dims
+    - pohly
+  # emeritus:
+  # - spiffxp
   sig-node-approvers:
     - Random-Liu
     - dchen1107
@@ -267,28 +270,24 @@ aliases:
     - ffromani
     - tallclair
   sig-network-approvers:
-    - andrewsykim
     - aojea
     - bowei
-    - caseydavenport
     - danwinship
-    - dcbw
-    - freehan
-    - khenidak
-    - mrhohn
     - robscott
     - thockin
+  # emeritus:
+  # - andrewsykim
+  # - caseydavenport
+  # - dcbw
+  # - freehan
+  # - khenidak
+  # - mrhohn
   sig-network-reviewers:
-    - andrewsykim
+    - adrianmoisey
     - aojea
     - aroradaman
     - bowei
-    - caseydavenport
     - danwinship
-    - dcbw
-    - freehan
-    - khenidak
-    - mrhohn
     - robscott
     - thockin
     - tnqn
@@ -447,6 +446,7 @@ aliases:
   sig-cloud-provider-api-reviewers:
     - elmiko
     - cheftako
+    - joelspeed
     - dims
   # sig-cluster-lifecycle-api-reviewers:
   #   -
@@ -486,8 +486,9 @@ aliases:
     - wojtek-t
   # emeritus:
   # - mm4tt
-  sig-scheduling-api-reviewers:
-    - alculquicondor
+  # sig-scheduling-api-reviewers:
+  # emeritus:
+  # - alculquicondor
   sig-storage-api-reviewers:
     - deads2k
     - saad-ali
@@ -555,5 +556,6 @@ aliases:
   conformance-behavior-approvers:
     - smarterclayton
     - johnbelamaric
-    - spiffxp
     - dims
+  # emeritus:
+  # - spiffpx

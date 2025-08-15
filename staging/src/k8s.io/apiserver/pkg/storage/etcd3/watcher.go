@@ -77,6 +77,7 @@ type watcher struct {
 	versioner           storage.Versioner
 	transformer         value.Transformer
 	getCurrentStorageRV func(context.Context) (uint64, error)
+	stats               *statsCache
 }
 
 // watchChan implements watch.Interface.
@@ -91,6 +92,7 @@ type watchChan struct {
 	cancel            context.CancelFunc
 	incomingEventChan chan *event
 	resultChan        chan watch.Event
+	stats             *statsCache
 }
 
 // Watch watches on a key and returns a watch.Interface that transfers relevant notifications.
@@ -134,6 +136,7 @@ func (w *watcher) createWatchChan(ctx context.Context, key string, rev int64, re
 		internalPred:      pred,
 		incomingEventChan: make(chan *event, incomingBufSize),
 		resultChan:        make(chan watch.Event, outgoingBufSize),
+		stats:             w.stats,
 	}
 	if pred.Empty() {
 		// The filter doesn't filter out any object.
@@ -287,7 +290,7 @@ func (wc *watchChan) sync() error {
 	for {
 		startTime := time.Now()
 		getResp, err = wc.watcher.client.KV.Get(wc.ctx, preparedKey, opts...)
-		metrics.RecordEtcdRequest(metricsOp, wc.watcher.groupResource.String(), err, startTime)
+		metrics.RecordEtcdRequest(metricsOp, wc.watcher.groupResource, err, startTime)
 		if err != nil {
 			return interpretListError(err, true, preparedKey, wc.key)
 		}
@@ -397,12 +400,20 @@ func (wc *watchChan) startWatching(watchClosedCh chan struct{}, initialEventsEnd
 		}
 		if wres.IsProgressNotify() {
 			wc.queueEvent(progressNotifyEvent(wres.Header.GetRevision()))
-			metrics.RecordEtcdBookmark(wc.watcher.groupResource.String())
+			metrics.RecordEtcdBookmark(wc.watcher.groupResource)
 			continue
 		}
 
 		for _, e := range wres.Events {
-			metrics.RecordEtcdEvent(wc.watcher.groupResource.String())
+			if wc.stats != nil {
+				switch e.Type {
+				case clientv3.EventTypePut:
+					wc.stats.UpdateKey(e.Kv)
+				case clientv3.EventTypeDelete:
+					wc.stats.DeleteKey(e.Kv)
+				}
+			}
+			metrics.RecordEtcdEvent(wc.watcher.groupResource)
 			parsedEvent, err := parseEvent(e)
 			if err != nil {
 				logWatchChannelErr(err)
